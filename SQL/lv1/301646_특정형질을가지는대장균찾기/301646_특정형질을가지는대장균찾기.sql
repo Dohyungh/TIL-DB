@@ -1,0 +1,4 @@
+-- SQL에도 비트 연산이 있다.
+SELECT count(*) as COUNT
+FROM ECOLI_DATA
+WHERE NOT (GENOTYPE & 2) AND (GENOTYPE & 4 OR GENOTYPE & 1);
