@@ -19,6 +19,57 @@
   - 블록뷰 `json`
   - Test set Accuracy `float`
 
+```json
+{
+	model: [
+		{
+			type: "convolution"
+			in_channels: 3
+			out_channels: 5
+			kernel_size: 3
+		},
+		{
+			type: "convolution"
+			in_channels: 3
+			out_channels: 5
+			kernel_size: 3
+		}
+	],
+	code: "string",
+	dataset: "MNIST",
+	testAccuracy: 10.0,
+	testLoss: 10.0,
+	trainInfo: {
+		loss: [10.0,10.0,10.0,10.0,10.0,10.0,10.0,10.0,10.0,10.0],
+		accuracy: [10.0,10.0,10.0,10.0,10.0,10.0,10.0,10.0,10.0,10.0]
+	},
+	confusionMatrix: "string",
+	exampleImage: "string",
+	totalParams: 21840,
+	params: [260, 5020, 0, 16050, 510],
+	featureActivation: [
+		{
+			origin: "string",
+			visualize: "string"
+		},
+		{
+			origin: "string",
+			visualize: "string"
+		}
+	],
+	activationMaximization: [
+		{
+			label: "string",
+			image:"string"
+		},
+		{
+			label: "string",
+			image:"string"
+		}
+	]
+}
+```
+
 ## 요구사항
 
 - 위에 열거한 사항들은 "모델 학습결과 분석 페이지"에서 렌더링할 사항들이다.
@@ -86,3 +137,6 @@ Confusion matrix 상에서 오답수가 가장 많은 칸? 에서 하나의 데�
 ## 결론
 
 10. 24 팀원과 회의를 거쳐 결정해야겠다.
+
+팀원과 회의를 거친 결과, 이미지를 픽셀단위로 데이터를 받아서 프론트에서 렌더링 하는 방식을 사용해보기로 하였다.
+이때 픽셀 단위의 데이터는 string 으로 전송해 프론트에서 파싱하여 사용하고, string 데이터는 데이터 베이스에 저장할 것이다.
