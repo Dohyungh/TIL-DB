@@ -115,3 +115,118 @@ from save_model import save_model_to_minio
 # 모델 학습을 완료하고 함수로 모델을 MinIO에 저장해 주세요.
 # save_model_to_minio(model, "MODEL_VERSION_ID")
 ```
+
+### minio_init.py
+
+SCV 서비스에서 MNIST, Fashion-MNIST, CIFAR-10, SVHN, EMNIST 의 5개 데이터 셋을 고정적으로 지원한다.
+해당 데이터 셋을 학습용 FastAPI 컨테이너에서 다운로드 받아서(data 폴더 생성) 사용할 수도 있지만, 그러면 컨테이너가 내려갈 때마다 새로 다운로드 받아야 한다. 또, 지원되는 데이터 셋이 고정적인 만큼 다른 곳에서 직접적으로 사용하게 될 수도 있다.
+
+따라서, 데이터 셋을 MinIO 오브젝트 스토리지에 저장하였다.
+
+이때, MinIO Python sdk를 이용하기 때문에 이를 파이썬 base image의 docker image로 작성할 지는 아직 미지수이다.
+
+```python
+from minio import Minio
+from dotenv import load_dotenv
+from io import BytesIO
+import os
+import pickle
+
+from torchvision.datasets import MNIST, FashionMNIST, CIFAR10, SVHN, EMNIST
+from torchvision import transforms
+
+from collections import defaultdict
+
+load_dotenv(verbose=True)
+minio_user_name=os.getenv("MINIO_ROOT_USER")
+minio_user_password=os.getenv("MINIO_ROOT_PASSWORD")
+minio_host_name=os.getenv("MINIO_HOST_NAME")
+minio_model_bucket=os.getenv("MINIO_MODEL_BUCKET")
+minio_dataset_bucket=os.getenv("MINIO_DATASET_BUCKET")
+
+client = Minio("{}:9002".format(minio_host_name),
+        access_key=minio_user_name,
+        secret_key=minio_user_password,
+        # SSL 설정 해제
+        secure=False
+    )
+
+def upload_dataset_to_minio(data, object_name):
+    buffer = BytesIO()
+    pickle.dump(data, buffer)
+    buffer.seek(0)
+
+    client.put_object(
+        bucket_name=minio_dataset_bucket,
+        object_name=object_name,
+        data=buffer,
+        length=buffer.getbuffer().nbytes
+    )
+    print(f"{object_name} 데이터 셋을 업로드 했습니다.")
+
+def upload_cka_dataset_to_minio(test_data, dataset_name):
+    indices_per_label = defaultdict(list)
+
+    for idx, (image, label) in enumerate(test_data):
+        if (len(indices_per_label)) < 10:
+            indices_per_label[label].append(idx)
+
+    if all(len(indices) == 10 for indices in indices_per_label.values()):
+        selected_indices = [idx for indices in indices_per_label.values() for idx in indices]
+        upload_dataset_to_minio(Subset(test_dataset, selected_indices), f"{dataset_name}_cka")
+        print(f"{dataset_name}의 cka 데이터 셋을 업로드 했습니다.")
+
+
+
+
+if not client.bucket_exists(minio_model_bucket):
+    client.make_bucket(minio_model_bucket)
+if not client.bucket_exists(minio_dataset_bucket):
+    client.make_bucket(minio_dataset_bucket)
+
+
+while not client.bucket_exists(minio_dataset_bucket):
+    sleep(2)
+
+
+transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+
+# MNIST 데이터셋
+train_dataset_mnist = MNIST(root='./data', train=True, download=True, transform=transform)
+test_dataset_mnist = MNIST(root='./data', train=False, download=True, transform=transform)
+upload_dataset_to_minio(train_dataset_mnist,  "mnist_train")
+upload_dataset_to_minio(test_dataset_mnist, "mnist_test")
+upload_cka_dataset_to_minio(test_dataset_mnist, "mnist")
+
+# Fashion-MNIST 데이터셋
+train_dataset_fashion_mnist = FashionMNIST(root='./data', train=True, download=True, transform=transform)
+test_dataset_fashion_mnist = FashionMNIST(root='./data', train=False, download=True, transform=transform)
+upload_dataset_to_minio(train_dataset_fashion_mnist, "fashion_mnist_train")
+upload_dataset_to_minio(test_dataset_fashion_mnist, "fashion_mnist_test")
+upload_cka_dataset_to_minio(test_dataset_fashion_mnist, "fashion_mnist")
+
+# CIFAR-10 데이터셋
+train_dataset_cifar10 = CIFAR10(root='./data', train=True, download=True, transform=transform)
+test_dataset_cifar10 = CIFAR10(root='./data', train=False, download=True, transform=transform)
+upload_dataset_to_minio(train_dataset_cifar10, "cifar10_train")
+upload_dataset_to_minio(test_dataset_cifar10, "cifar10_test")
+upload_cka_dataset_to_minio(test_dataset_cifar10, "cifar10")
+
+# SVHN 데이터셋
+train_dataset_svhn = SVHN(root='./data', split='train', download=True, transform=transform)
+test_dataset_svhn = SVHN(root='./data', split='test', download=True, transform=transform)
+upload_dataset_to_minio(train_dataset_svhn, "svhn_train")
+upload_dataset_to_minio(test_dataset_svhn, "svhn_test")
+upload_cka_dataset_to_minio(test_dataset_svhn, "svhn")
+
+# EMNIST 데이터셋
+train_dataset_emnist = EMNIST(root='./data', split='letters', train=True, download=True, transform=transform)
+test_dataset_emnist = EMNIST(root='./data', split='letters', train=False, download=True, transform=transform)
+upload_dataset_to_minio(train_dataset_emnist, "emnist_train")
+upload_dataset_to_minio(test_dataset_emnist, "emnist_test")
+upload_cka_dataset_to_minio(test_dataset_emnist, "emnist")
+```
+
+테스트 데이터 셋에서 레이블 당 10개씩 뽑아 100 \* 100 사이즈의 CKA 행렬을 만들기 위해서 따로 데이터 셋을 생서하여 MinIO에 저장하였다.
+
+이외에도, 테스트 데이터 셋 전체에 대해서 feature activation 이미지와 Maximizing feature image를 데이터셋에서 직접 찾아 출력해주기 위한 API 작성을 계획하고 있다.
