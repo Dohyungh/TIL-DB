@@ -137,6 +137,10 @@ from torchvision import transforms
 
 from collections import defaultdict
 
+from time import sleep
+
+from torch.utils.data import Subset
+
 load_dotenv(verbose=True)
 minio_user_name=os.getenv("MINIO_ROOT_USER")
 minio_user_password=os.getenv("MINIO_ROOT_PASSWORD")
@@ -168,12 +172,15 @@ def upload_cka_dataset_to_minio(test_data, dataset_name):
     indices_per_label = defaultdict(list)
 
     for idx, (image, label) in enumerate(test_data):
-        if (len(indices_per_label)) < 10:
+        if (len(indices_per_label[label])) < 10:
             indices_per_label[label].append(idx)
+
+    for indices in indices_per_label.values() :
+        print(len(indices))
 
     if all(len(indices) == 10 for indices in indices_per_label.values()):
         selected_indices = [idx for indices in indices_per_label.values() for idx in indices]
-        upload_dataset_to_minio(Subset(test_dataset, selected_indices), f"{dataset_name}_cka")
+        upload_dataset_to_minio(Subset(test_data, selected_indices), f"{dataset_name}_cka")
         print(f"{dataset_name}의 cka 데이터 셋을 업로드 했습니다.")
 
 
@@ -205,14 +212,14 @@ upload_dataset_to_minio(train_dataset_fashion_mnist, "fashion_mnist_train")
 upload_dataset_to_minio(test_dataset_fashion_mnist, "fashion_mnist_test")
 upload_cka_dataset_to_minio(test_dataset_fashion_mnist, "fashion_mnist")
 
-# CIFAR-10 데이터셋
+# # CIFAR-10 데이터셋
 train_dataset_cifar10 = CIFAR10(root='./data', train=True, download=True, transform=transform)
 test_dataset_cifar10 = CIFAR10(root='./data', train=False, download=True, transform=transform)
 upload_dataset_to_minio(train_dataset_cifar10, "cifar10_train")
 upload_dataset_to_minio(test_dataset_cifar10, "cifar10_test")
 upload_cka_dataset_to_minio(test_dataset_cifar10, "cifar10")
 
-# SVHN 데이터셋
+# # SVHN 데이터셋
 train_dataset_svhn = SVHN(root='./data', split='train', download=True, transform=transform)
 test_dataset_svhn = SVHN(root='./data', split='test', download=True, transform=transform)
 upload_dataset_to_minio(train_dataset_svhn, "svhn_train")
@@ -230,3 +237,13 @@ upload_cka_dataset_to_minio(test_dataset_emnist, "emnist")
 테스트 데이터 셋에서 레이블 당 10개씩 뽑아 100 \* 100 사이즈의 CKA 행렬을 만들기 위해서 따로 데이터 셋을 생서하여 MinIO에 저장하였다.
 
 이외에도, 테스트 데이터 셋 전체에 대해서 feature activation 이미지와 Maximizing feature image를 데이터셋에서 직접 찾아 출력해주기 위한 API 작성을 계획하고 있다.
+
+#### 추가
+
+틀린 내용이 있어 수정했다.
+
+한가지 재밌는 점은, Subset 모듈은 객체를 저장할 때 원본 객체에 선택된 index만 담아서 저장한다. 따라서, MinIO에 저장된 객체를 보면,
+
+![alt text](image.png)
+
+와 같이 원본(test dataset)과 CKA용으로 따로 뺀 데이터셋 (cka)의 용량이 동일하다.
